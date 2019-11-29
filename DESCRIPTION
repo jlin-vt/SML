@@ -1,0 +1,22 @@
+Package: SML
+Title: Statistical Machine Learning
+Version: 0.0.0.9000
+Authors@R: person("Jiali", "Lin", email = "jiali@vt.edu", role = c("aut", "cre"))
+Description: This package executes the theory and application of statistical machine learning, focusing on statistics, bayesian and graphical model. It follows the structure of the classical machine learning textbooks (Machine Learning: a probabilistic approach) by Kevin Murphy.
+Depends: R (>= 3.3.1)
+License: GPL (>= 3)
+Encoding: UTF-8
+Imports:
+    assertthat,
+    coin,
+    dplyr,
+    ggplot2,
+    magrittr,
+    RColorBrewer,
+    tidyr
+Suggests:
+    testthat,
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+RoxygenNote: 6.0.1

@@ -1,0 +1,274 @@
+---
+
+title: 'Chapter 21: Variational inference'
+author: "Jiali Lin"
+date: "5/3/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(SML)
+library(ggplot2)
+library(mvtnorm)
+if(!require("mixtools")) { install.packages("mixtools");  require("mixtools") }
+```
+
+## 1. Example: Illustrating forwards vs reverse KL on a bimodal distribution
+
+Generate Data.
+
+```{r}
+mu <- matrix(c(-1, -1, 1, 1), nrow = 2,byrow = T);
+
+Sigma <- array(0,c(2, 2, 2));
+Sigma[, , 1] <- matrix(c(1/2, 1/4, 1/4, 1), nrow = 2);
+Sigma[, , 2] <- matrix(c(1/2, -1/4, -1/4, 1), nrow = 2);
+SigmaKL <- matrix(c(3, 2, 2, 3), nrow = 2);
+
+x1 <- seq(-4, 4, 0.1);
+x2 <- x1;
+
+n1 <- length(x1);
+n2 <- length(x2);
+
+f1 <- matrix(0, nrow = n1, ncol = n2); 
+f2 <- matrix(0, nrow = n1, ncol = n2); 
+klf <- matrix(0, nrow = n1, ncol = n2); 
+kll <- klf;
+klr <- klf;
+
+for (i in 1:n1){
+  f1[i,] <- dmvnorm(cbind(rep(x1[i], n2), x2), mu[1, ], Sigma[, , 1]);
+  f2[i,] <- dmvnorm(cbind(rep(x1[i], n2), x2), mu[2, ], Sigma[, , 2]);
+  klf[i,] <- dmvnorm(cbind(rep(x1[i], n2), x2), matrix(c(0, 0), ncol = 1), SigmaKL);
+  kll[i,] <- dmvnorm(cbind(rep(x1[i], n2), x2), mu[1, ], Sigma[, , 1] * 0.6);
+  klr[i,] <- dmvnorm(cbind(rep(x1[i], n2), x2), mu[2, ], Sigma[, , 2]*  0.6);
+}
+```
+
+Average two densities:
+
+```{r}
+f <- f1 + f2;
+```
+
+Make figures:
+
+```{r}
+contour(x1, x2, f, col = "blue")
+contour(x1, x2, klf, add = TRUE, col = "red") 
+
+contour(x1, x2, f, col = "blue")
+contour(x1, x2, kll, add = TRUE, col = "red") 
+
+contour(x1, x2, f, col = "blue")
+contour(x1, x2, klr, add = TRUE, col = "red") 
+```
+
+## 2. Example: Illustrating forwards vs reverse KL on a symmetric Gaussian
+
+Generate Data.
+
+```{r}
+mu <- c(0, 0)
+
+Sigma <- matrix(c(1, 0.97, 0.97, 1), ncol = 2);
+SigmaKLa <- diag(2)/25;
+SigmaKLb <- diag(2);
+
+
+x1 <- seq(-1, 1, 0.01);
+x2 <- x1;
+
+n1 <- length(x1);
+n2 <- length(x2);
+
+f <- matrix(NA, nrow = n1, ncol = n2); 
+klqp <- f;
+klpq <- f;  
+
+for (i in 1:n1){
+  f[i, ] <- dmvnorm(cbind(rep(x1[i], n2), x2), mu, Sigma);
+  klqp[i, ] <- dmvnorm(cbind(rep(x1[i], n2), x2), mu, SigmaKLa);
+  klpq[i, ] <- dmvnorm(cbind(rep(x1[i], n2), x2), mu, SigmaKLb);
+}
+```
+
+Make figures.
+
+```{r}
+contour(x1, x2, f, col = "blue")
+contour(x1, x2, klqp, add = TRUE, col = "red") 
+
+contour(x1, x2, f, col = "blue")
+contour(x1, x2, klpq, add = TRUE, col = "red") 
+```
+
+## 3. Example: Variational bayes for univariate Gaussian
+
+Simulate data:
+
+```{r}
+set.seed(12) 
+N <- 10  
+D <- 1 
+data <- runif(N) 
+data <- (data - mean(data)) / sd(data) 
+data <- matrix(data) 
+```
+
+Pick hyper parameters:
+
+```{r}
+prior <- list()
+prior$a0 <- 0
+prior$b0 <- 0
+prior$mu0 <- 0
+prior$kappa0 <- 0
+```
+
+Initialize VB to fit univariate gaussian:
+
+```{r}
+post <- list()
+post$aN <- 2.5  
+post$bN <- 1 
+post$muN <- 0.5  
+post$kappaN <- 5 
+```
+
+Set the true posterior model using normal gamma prior
+```{r}
+truePost <- list()
+truePost$mu <- mean(data) 
+truePost$kappa <- N 
+truePost$alpha <- N/2 
+truePost$beta <- 1/2*sum((data - mean(data) ) ** 2) 
+```
+
+Obtain target distribution:
+
+```{r}
+mu <- seq(-1.0 , 1.0 , by = 0.1)
+lambda <- seq(0, 2, by = 0.1)
+dens <- outer(mu, lambda)
+
+## Plot truth
+par(mfrow = c(2, 2))
+contour(mu, lambda, dens, 
+        xlab = 'mu', ylab = 'lambda', col = 'green', drawlabels = F)
+```
+
+Set options:
+
+```{r}
+Options <- list()
+Options$maxIter <- 100
+Options$iter <- 1
+Options$Lq <- 0
+Options$converged <- FALSE
+Options$tol <- 1e-5  
+Options$Lbound <- rep(NA, Options$maxIter)  
+Options$Lbound[1] <- Options$Lq
+```
+
+Define true joint distribution:
+
+```{r}
+TrueNormalGammaPdf <- function(mu, lambda){
+  muprior <- truePost$mu  
+  kappa <- truePost$kappa   
+  alpha <- truePost$alpha  
+  beta <- truePost$beta 
+  C <- (beta ** alpha * sqrt(kappa)) / (gamma(alpha) * sqrt(2 * pi))
+  p <- C * (lambda ** (alpha-1/2)) * (exp(-beta * lambda)) *  
+    (exp(-kappa / 2 * (lambda * (mu - muprior) ** 2)))
+  return(p)
+}
+```
+
+Define approximate of joint normal-gmma density. 
+
+```{r}
+vbPost <- function(mu, lambda){
+  C <- (bN ** aN * sqrt(kappaN)) / (gamma(aN) * sqrt(2 * pi))
+  p <- C * (lambda ** (aN-1/2)) * (exp(-bN * lambda)) *  
+    (exp(-kappaN/2* (lambda * (mu - muN) ** 2)))
+  return(p)
+}
+```
+
+
+Run the Variational Bayes.
+
+```{r}
+res = UniGaussVb(data, prior, post, Options, TrueNormalGammaPdf, vbPost)
+```
+
+## 4. Example: multivariate Variational EM algorithm
+
+Read faithful (2-d) data set and make plot.
+
+```{r}
+X <- faithful
+plot(X)
+```
+
+Standardize the data.
+
+```{r}
+X <- t(X)
+X <- X - kronecker(matrix(1, 1, ncol(X)),apply(X, 1, mean))	
+X <- X / kronecker(matrix(1, 1, ncol(X)),apply(X, 1, var))	
+dim <- dim(X)[1]
+N <- dim(X)[2]
+```
+
+Initialize with EM algorithm.
+
+```{r}
+ncentres <- 15;
+mix <- list();
+mix$ncentres <- ncentres;
+mix$priors <-  matrix(1, 1, mix$ncentres) / mix$ncentres;
+mix$centres <- matrix(rnorm(mix$ncentres * dim, mean = 0, sd = 1),  
+                      mix$ncentres, dim);
+mix$covars <- kronecker(array(1, c(1, 1, mix$ncentres)), diag(dim));	
+```
+
+Intialize the priors.
+
+```{r}
+PriorPar <- list();
+PriorPar$alpha <- .001;
+PriorPar$mu <- matrix(0, dim, 1);
+PriorPar$beta <- 1;
+PriorPar$W <- 200 * diag(dim);
+PriorPar$v <- 20;
+```
+
+Set the options for VBEM.
+
+```{r}
+options <- list();
+options$maxIter <- 100;
+options$threshold <- 1e-5;
+options$displayFig <- TRUE;
+options$displayIter <- TRUE;
+```
+
+Call the function:
+  
+```{r}
+res <- GmmVbem(X, mix, PriorPar, options)
+```
+
+
+Plot lower bound.
+
+```{r}
+plot(res$L, lty = 2, type ="l", 
+     ylab = "lower bound on log marginal likelihood",
+     main = "variational Bayes objective for GMM")
+```

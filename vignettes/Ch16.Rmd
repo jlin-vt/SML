@@ -1,0 +1,76 @@
+---
+title: "Chapter 16: Adaptive basis function models"
+author: "Jiali Lin"
+date: "5/3/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(SML)
+library(rpart)
+library(latex2exp)
+library(ggplot2)
+```
+
+## 1. Example: Adaboost using decision trees as a weak learner
+
+Let's use 60-dimensional sonar data.
+
+```{r}
+train <- read.csv("data/sonar_train.csv", header = FALSE)
+test <- read.csv("data/sonar_test.csv", header = FALSE)
+index.x <- 1:60
+index.y <- 61
+n.iter <- 50
+```
+
+Train Adaboost model with decision trees as a weak learner.
+```{r}
+res <- AdaBoost(train, test, index.x, index.y, n.iter)
+train.error <- res$train.error
+test.error <- res$test.error
+```
+
+Make a plot: training (solid blue) and test (solid red) error vs number of iterations.
+
+```{r}
+plot(seq(1, 50), test.error, type = "l", ylim = c(0, .5), col = "blue",
+     ylab = "Error Rate", xlab = "Iterations", lwd = 2, main = 'Atul Kumar')
+lines(train.error, lwd = 2, col = "red")
+legend(4, .5, c("Training Error", "Test Error"), 
+       col = c("purple", "black"), lwd = 2)
+```
+
+## 2. Example: Losses for Binary Classification
+
+Let's generate some data.
+
+```{r}
+z <- seq(-2, 2, 0.01)
+L01 <- as.numeric((sign(z) < 0))
+Lhinge <- pmax(0, 1 - z)
+Lnll <- log2(1 + exp(-z))
+Lbinom <- log2(1 + exp(-2 * z))
+Lexp <- exp(-z)
+```
+
+Plot different loss functions.
+
+```{r}
+ggplot() + 
+  geom_line(aes(x = z,y = L01,color = "0-1")) + 
+  geom_line(aes(x = z,y = Lhinge, color = "hinge")) + 
+  geom_line(aes(x = z,y = Lnll, color = "logloss")) + 
+  xlab(TeX("$\\eta$")) + 
+  ylab("loss") + 
+  theme(legend.title = element_blank())
+
+ggplot() + 
+  geom_line(aes(x = z,y = L01, color = "0-1")) + 
+  geom_line(aes(x = z,y = Lexp, color = "exp")) + 
+  geom_line(aes(x = z,y = Lnll, color = "logloss")) + 
+  xlab(TeX("$\\eta$"))   + 
+  ylab("loss") + 
+  theme(legend.title = element_blank())
+```

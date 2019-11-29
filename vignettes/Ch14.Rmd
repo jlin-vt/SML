@@ -1,0 +1,69 @@
+---
+
+title: 'Chapter 14: Kernels'
+author: "Jiali Lin"
+date: "5/3/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(SML)
+library(quadprog)
+library(ggplot2)
+library(data.table)
+```
+
+## 1. Example: Optimizing a Support Vector Machine with Quadratic Programming
+
+Generate data:
+
+```{r}
+set.seed(2015)
+df <- data.frame(X1 = c(rnorm(5), rnorm(5) + 5), X2 = c(rnorm(5), rnorm(5) + 3), Y = c(rep(1,5), rep(-1, 5)))
+ggplot(df, aes(x = X1, y = X2, color = as.factor(Y))) + geom_point()
+```
+
+Specify some terms needed:
+
+```{r}
+Dmat <- matrix(rep(0, 3*3), nrow=3, ncol=3)
+diag(Dmat) <- 1
+Dmat[nrow(Dmat), ncol(Dmat)] <- .0000001
+dvec <- rep(0, 3)
+Amat <- as.matrix(df[, c("X1", "X2")])
+Amat <- cbind(Amat, b = rep(-1, 10))
+Amat <- Amat * df$Y
+bvec <- rep(1, 10)
+```
+
+Solve SVM by quadratic programming:
+
+```{r}
+res <- solve.QP(Dmat, dvec, t(Amat), bvec = bvec)
+```
+
+Plot:
+
+```{r}
+plotMargin <- function(w = 1 * c(-1, 1), b = 1){
+  x1 = seq(-20, 20, by = .01)
+  x2 = (-w[1] * x1 + b)/w[2]
+  l1 = (-w[1] * x1 + b + 1) / w[2]
+  l2 = (-w[1] * x1 + b - 1) / w[2]
+  dt <- data.table(X1 = x1, X2 = x2, L1 = l1, L2 = l2)
+  ggplot(dt) + 
+    geom_line(aes(x = X1, y = X2)) + 
+    geom_line(aes(x = X1, y = L1), color="blue") + 
+    geom_line(aes(x = X1, y = L2), color = "green") +
+    geom_hline(yintercept = 0, color = "red") + 
+    geom_vline(xintercept = 0, color = "red") + xlim(-5, 5) + ylim(-5, 5) +
+    labs(title=paste0("w=(", w[1], ",", w[2], "), b=", b))
+}
+
+plotMargin(w = res$solution[1:2], b = res$solution[3]) + 
+  geom_point(data = df, aes(x = X1, y = X2, color = as.factor(Y)))
+```
+
+## Reference
+- [Optimizing a Support Vector Machine with Quadratic Programming](https://stats.stackexchange.com/questions/179900/optimizing-a-support-vector-machine-with-quadratic-programming/180093%7D)

@@ -1,0 +1,86 @@
+---
+
+title: 'Chapter 24: Markov chain Monte Carlo (MCMC) inference'
+author: "Jiali Lin"
+date: "5/3/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(SML)
+library(ggplot2)
+```
+
+## 1. Example: Metropolis Hasting samlinging MCMC for 1-d Gaussian Mixture Model
+
+Define arget and proposal distribution.
+    
+```{r}
+p <- function(x) 0.4 * dnorm(x, 0, 1) + .6 * dnorm(x, 5, 1)
+N <- 1000       
+```
+
+See the effect of variance on the acceptance rate.
+
+```{r}
+var <- c(1, 10, 100)
+
+par(mfrow = c(3, 2))
+
+for (j in 1:length(var)){
+  
+  x <- seq(-5, 10, .1)
+  plot(x, p(x), type = "l", lwd = 2)
+  
+  xs = MetropolisHastingSampler(p, N)
+
+  hist(xs, breaks = 20, probability = TRUE, col = "orange", add = TRUE)
+  plot(xs, type = "l", xlab ="", ylab = "", xaxt = "n",
+       yaxt = "n", bty = "l", col = "blue")
+}
+```
+
+## 3. Example: Slice sampling univariate distribution.
+
+* Goal: $f(\theta) = (1+\sin^2(3\theta))(1+\cos^4(5\theta))/\exp\{-\theta^2/2\}$.
+
+Initials
+
+```{r}
+nMC <- 2000
+theta.sample <- rep(NA, nMC)
+u.sample <- matrix(NA, nrow = nMC, ncol = 3)
+theta <- 0.5
+```
+
+Main algorithm
+
+```{r}
+for (i in 1:nMC){
+  ## Step 1: sample u1, u2, u3 from uniform
+  u1 <- runif(1, min = 0, max = 1+(sin(3*theta)) ** 2)
+  u2 <- runif(1, min = 0, max = 1+(cos(5*theta)) ** 4)
+  u3 <- runif(1, min = 0, max =exp(-theta ** 2 / 2))
+  u.sample[i,] = c(u1,u2,u3)
+  
+  ## Step 2: sample theta from A(u1, u2, u3)
+  repeat {
+    theta <- runif(1, min = -sqrt(-2 * log(u3)), max = sqrt(-2 * log(u3)))
+    if ((sin(3 * theta)) ** 2>= u1 - 1 && (cos(5 * theta)) ** 4 >= u2 - 1) break  
+  }
+  theta.sample[i] <- theta
+}
+```
+
+Plot:
+
+```{r}
+burnin <- 1000
+p1 <- hist(theta.sample[(burnin+1):nMC], nclass = 75, col = "orange",
+           proba = T, xlab = "x", ylab = "", main = "")
+theta_grid <- seq(-3, 3, length.out = 100)
+f.theta <- (1 + sin(3 * theta_grid) ** 2) * (1 + cos(5 * theta_grid) ** 4) * exp(-theta_grid ** 2 / 2)
+f.theta <- f.theta * max(p1$density) / max(f.theta)
+lines(theta_grid, f.theta, col = "black", lwd = 2)
+```

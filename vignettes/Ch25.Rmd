@@ -1,0 +1,141 @@
+---
+title: "Chapter 25: Clustering"
+author: "Jiali Lin"
+date: "5/3/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(SML)
+library(ggplot2)
+```
+
+## 1. Example: Chinese restaurant process
+
+We simulate 100 customers and set $\alpha = 4$.
+
+```{r, eval=F}
+n <- 100
+K <- 4
+CRP(n, K)
+```
+
+## 2. Example: Polya urn process.
+
+* Goal: Assume $F \sim DP(\alpha, G_0)$ with $\alpha = 5, G0 \sim N (0, 1)$. Let $\theta_i \sim F$, generate 10000 samples from $F$ using the Polya urn scheme.
+
+Generate data and define base function.
+
+```{r}
+G_0 <- function(){
+  rnorm(1, mean = 0, sd = 1)
+}
+N <- 100
+alpha <- 2
+
+theta <- PolyaUrn(G_0, N, alpha)
+```
+
+Make plots.
+
+```{r}
+par(mfrow = c(1, 2))
+hist(theta, breaks = 20, xlim = c(-1, 1), col = "black")
+
+plot(theta, seq(1, N),
+     ylab = "Sample index", xlab = "Cluster by order of appearance",
+     ylim = c(0,max(10, N)), xlim = c(-1, 1), pch = 19)
+```
+
+## 3. Example: stick breaking procss
+* Assume $F \sim  DP(\alpha, G_0 with \alpha = 5, G_0 \sim N (0, 1)$. 
+* Approximating F by $\hat{F} = \sum (w_h * \delta(\theta_h))$, where $H = 100$
+* The kth weight is
+    * $beta_k = (1 - beta_1) * (1 - beta_2) * ... * (1 - \beta_{k-1}) * \beta_k$
+    * where each $beta_i is drawn from a Beta distribution
+    * $\beta_i \sim Beta(1, \alpha)$
+* Finally Return a vector of weights drawn from a stick-breaking process with dispersion $\alpha$.
+
+```{r}
+alpha <- c(2, 5)
+nn <- 20;
+
+par(mfrow = c(length((alpha)), 2)) 
+
+for(ii in 1:length(alpha)){
+  for (trial in 1:2){
+    beta <- rbeta(nn, 1, alpha[ii]);
+    neg <- cumprod(1 - beta);
+    pi <- beta * c(1, neg[1:(length(neg) - 1)]);
+    barplot(pi, main = bquote(~alpha ~ "=" ~.(alpha[ii])), col = "black")
+  }
+}
+```
+
+## 4. Example: Gibbs sampling for the Gaussian Dirichlet process mixture model.
+
+* Likelihood: $x_i|\mu_i,T_i \sim N(\mu, 1/T)$,
+* Random effect: $(\mu, T) \sim G$,
+* Prior: $G \sim DP(\alpha, G_0)$, where $G_0 \sim NormalGamma(\mu_0, \kappa_0, \tau_0, \beta_0)$
+* Posterior: $mu, T|X \sim NormalGamma(\mu_N, \kappa_N, tauN, \beta_N)$, where
+    1. $x_m$: mean(x)
+    2. $\mu_N$: $(\kappa_0 * \mu_0 + N * x_m) / \kappa_N$
+    3. $\kappa_N: \kappa_0 + N$
+    4. $\tau_N: \tau_0 + N / 2$
+    5. $\beta_N: beta_0 + 0.5 * \sum(x - x_m)^2 + [\kappa_0 * N *(x_m - \mu_0)^2] / (2 * \kappa_N)$
+
+Marginal Distributions:
+    * By construction, the marginal distribution over T is a gamma distribution.
+    * The conditional distribution over X given T is a Gaussian distribution. 
+    * The marginal distribution over X is a three-parameter non-standardized Student's t-distribution.
+    
+Let's generate and plot some synthetic data and plot it.
+
+```{r}
+  set.seed(1)
+  x <- c(rnorm(100, 100, 8), rnorm(50, 200, 25), rnorm(50, 25, 1))
+  labels <- c(rep("A", 100), rep("B", 50), rep("C", 50))
+  
+  df <- data.frame(X = x, Label = labels)
+  
+  ggplot(df, aes(x = X)) +
+    geom_histogram(binwidth = 3)
+  
+  ggplot(df, aes(x = X, fill = Label)) +
+    geom_histogram(binwidth = 3) +
+    labs(legend.position = "none") +
+    labs(title = "Ground Truth Mixture Model")
+  #ggsave("dpmm_ground_truth.pdf", height = 7, width = 7)
+```
+
+Run DP by Gibbs.
+
+```{r}
+nIter <- 100
+results <- DpmmGibbs(x, 0.5, 0.1, 0.1, 0, 0.1, nIter)
+results[, nIter]
+
+ggplot(df, aes(x = X, fill = factor(results[, nIter]))) +
+  geom_histogram(binwidth = 3) +
+  labs(legend.position = "none") +
+  labs(title = "dp-MM with alpha = 0.5")
+#ggsave("dpmm_0.5.pdf", height = 7, width = 7)
+```
+
+See how the parameters interact with the clustering results.
+
+```{r}
+nIter <- 100
+results <- DpmmGibbs(x, 100.0, 0.1, 0.1, 0, 0.1, nIter)
+results[, nIter]
+
+ggplot(df, aes(x = X, fill = factor(results[, nIter]))) +
+  geom_histogram(binwidth = 3) +
+  labs(legend.position = "none") +
+  labs(title = "dp-MM with alpha = 100.0")
+```
+
+
+## Reference
+- [Bayesian Nonparametrics in R and Julia](https://github.com/johnmyleswhite/bayesian_nonparametrics/blob/master/code/dpmm/dpmm.R)

@@ -1,0 +1,72 @@
+---
+
+title: 'Chapter 11: Mixture models and the EM algorithm'
+author: "Jiali Lin"
+date: "5/3/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(SML)
+library(ggplot2)
+```
+
+## 1. Example: Kmeans
+
+Read faithful (2-d) data set and set initial values.
+
+```{r}
+data <- faithful
+data <- as.matrix(data) 
+  
+K <- 2
+centers <- data[sample(nrow(data), K), ] 
+```
+
+Run Kmenas:
+
+```{r}
+res <- Kmeans(data, centers, Euclid, 10)
+plot(faithful$eruptions, faithful$waiting, 
+     xlab = "eruptions", ylab = "waiting",
+     col = res$clusters)
+points(res$centers, col = 1:2, pch = 8, cex = 2)
+```
+
+## 2. Example: univariate EM Algorithm
+
+Read faithful (2-d) data set and set initial values.
+
+```{r}
+params1 <- list(mu = c(2, 5), var = c(1, 1), probs = c(.5, .5)) 
+params2 <- list(mu = c(50, 90), var = c(1, 15), probs = c(.5, .5))  
+
+X1 <- matrix(faithful[, 1])
+X2 <- matrix(faithful[, 2])
+```
+
+Apply algorithm:
+
+```{r}
+test1 <- GaussmixEM(params1, X = X1, tol = 1e-8)
+test2 <- GaussmixEM(params2, X = X2, tol = 1e-8)
+
+qplot(x = eruptions, y = waiting, data = faithful) 
+```
+
+Make a plot: cluster by `eruptions`.
+
+```{r}
+ggplot(aes(x = eruptions, y = waiting), data = faithful) +
+  geom_point(aes(color = factor(test1$cluster)))  +
+  theme(legend.title = element_blank())
+```
+
+Make a plot: cluster by `waiting`.
+
+```{r}
+ggplot(aes(x = eruptions, y = waiting), data = faithful) +
+  geom_point(aes(color = factor(test2$cluster)))  +
+  theme(legend.title = element_blank())
+```

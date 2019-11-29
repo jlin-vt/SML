@@ -1,0 +1,342 @@
+---
+title: "Chapter 13: Sparse linear models"
+author: "Jiali Lin"
+date: "5/3/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(SML)
+library(mvtnorm)
+library(pscl)
+library(latex2exp)
+library(ggplot2)
+library(reshape2)
+library(R.matlab)
+library(glmnet)
+```
+
+## 1. Example: Bayesian variables selection with continuous gaussian responses by gibbs sampling.
+
+Let's generate and plot some synthetic data.
+
+```{r}
+set.seed(50)
+sigma2 <- 4
+p <- 5 
+n <- 100 
+true.gamma <- c(1, 0, 1, 0, 1)  
+true.beta <- c(10, 0, 8, 0, 6)   
+covariate <- matrix(rnorm(n * p, 0, 1), ncol = p, byrow = F) 
+Y <- covariate %*% true.beta + rnorm(n, 0, sqrt(sigma2)) 
+```
+
+Rough estimate without initial values.
+
+```{r}
+X0 <- covariate
+beta.hat <- solve(t(X0) %*% X0) %*% t(X0) %*% Y
+sig2.hat <- sum((Y - X0 %*% beta.hat) ** 2) / n
+```
+
+Set inital values and parameters for MCMC.
+
+```{r}
+nMc <- 100
+a <- (sig2.hat) ** 2 / 10 + 2 
+b <- sig2.hat * (a - 1)
+v0 <- rep(10e-3, p)
+v1 <- rep(sqrt(max(beta.hat) * 100), p)
+w <- 1 - sum(abs(beta.hat) < 4) / p
+gamma0 <- rbinom(p, size = 1, prob = w)
+sigma0 <- sig2.hat
+```
+
+Run the algorithm and estimate compuation time.
+
+```{r}
+## Tic
+ptm <- proc.time()
+
+## Run MCMC
+res <- BvsGibbs(covariate, Y, nMc, v1, v0, w, gamma0, sigma0, a, b)
+
+## Tok
+Time.used <- proc.time() - ptm
+Time.used[3] / 60
+```
+
+Get posterior mean of $\boldsymbol\beta$ and make plot.
+
+```{r}
+burnin <- 30
+beta.sample <- res$sample.beta[(burnin + 1):nMc, ]
+beta.mean <- colMeans(beta.sample)
+par(mfrow <- c(1, 1))
+
+qplot(x = 1:5, y = true.beta, colour = "Truth", geom = "point") + 
+geom_point(aes(y = beta.mean, colour = "Estimation")) + 
+ylab(TeX("$\\beta_j$ vs $\\hat{\\beta_j}$")) + 
+theme(legend.title = element_blank())
+```
+
+Posterior probability of $\gamma_j=1$.
+
+```{r}
+gamma.sample <- res$sample.gamma[(burnin + 1):nMc, ]
+post.gamma <- colMeans(gamma.sample)
+qplot(x = 1:5, y = true.gamma, colour = "Truth", geom = "point") + 
+  geom_point(aes(y = post.gamma, colour = "Estimation")) + 
+  coord_cartesian(ylim = c(0, 5)) + 
+  coord_cartesian(xlim = c(1, 5)) +
+  ylab(TeX("$\\gamma_j$ vs $\\hat{\\gamma_j}$")) + 
+  theme(legend.title = element_blank())
+```
+
+Posterior mean of $\sigma^2$.
+ 
+```{r}
+sigma2.sample <- res$sample.sigma2[(burnin + 1):nMc]
+sig2.mean <- mean(sigma2.sample)  
+qplot(sigma2.sample, geom = "histogram") + 
+  geom_vline(xintercept = sig2.mean, color = "blue") +
+  xlab(TeX("$\\hat{\\sigma^2}$ sample")) 
+```
+
+## 2. Example:  Bayesian variables selection with with spike-and-slab by Gibbs sampling algorithm.
+
+We use the same settings from previous section. We need to re-estimate the parameters and reset the initial values.
+
+```{r}
+X0 <- covariate
+beta.hat <- solve(t(X0) %*% X0) %*% t(X0) %*% Y
+sig2.hat <- sum((Y - X0 %*% beta.hat) ** 2) / n
+
+nMc <- 100
+a <- (sig2.hat) ** 2 / 10 + 2  
+b <- sig2.hat * (a - 1)
+v0 <- rep(10e-3, p)
+v1 <- rep(sqrt(max(beta.hat) * 100), p)
+w <- 1 - sum(abs(beta.hat) < 4) / p
+gamma0 <- rbinom(p, size = 1, prob = w)
+sigma0 <- sig2.hat
+```
+
+Apply the algorithm and estimate compuation time.
+
+```{r}
+ptm <- proc.time()
+
+res <- BvsGibbs(covariate, Y, nMc, v1, v0, w, gamma0, sigma0, a, b)
+
+Time.used <- proc.time() - ptm
+Time.used[3] / 60
+```
+
+The results would be close to the previous ones. So is the code.
+
+```{r, echo=F, eval=F}
+## Get posterior mean
+burnin <- nMc / 2
+beta.sample <- res$sample.beta[(burnin + 1):nMc, ]
+beta.mean <- colMeans(beta.sample)
+par(mfrow <- c(1, 1))
+
+## Posterior inference of beta.
+qplot(x = 1:5, y = true.beta, colour = "Truth", geom = "point") + 
+  geom_point(aes(y = beta.mean, colour = "Estimation")) + 
+  ylab(TeX("$\\beta_j$ vs $\\hat{\\beta_j}$")) + 
+  theme(legend.title = element_blank())
+
+## Posterior probability of gamma_j=1
+gamma.sample <- res$sample.gamma[(burnin + 1):nMc, ]
+post.gamma <- colMeans(gamma.sample)
+qplot(x = 1:5, y = true.gamma, colour = "Truth", geom = "point") + 
+  geom_point(aes(y = post.gamma, colour = "Estimation")) + 
+  coord_cartesian(ylim = c(0, 5)) + 
+  coord_cartesian(xlim = c(1, 5)) +
+  ylab(TeX("$\\gamma_j$ vs $\\hat{\\gamma_j}$")) + 
+  theme(legend.title = element_blank())
+
+## Posterior mean of sigma2
+sigma2.sample <- res$sample.sigma2[(burnin + 1):nMc]
+sig2.mean <- mean(sigma2.sample)  
+qplot(sigma2.sample, geom = "histogram") + 
+  geom_vline(xintercept = sig2.mean, color = "blue") +
+  xlab(TeX("$\\hat{\\sigma^2}$ sample"))  
+```
+
+## 3. Example: Bayesian variables selection with multiple linear regression by Metropolis–Hastings algorithm.
+
+We use the same settings from previous section. We need to re-estimate the parameters and reset the initial values.
+
+```{r}
+X0 <- cbind(1, covariate)
+beta.hat <- solve(t(X0) %*% X0) %*% t(X0) %*% Y
+sig2.hat <- sum((Y - X0 %*% beta.hat) ** 2) / n
+
+nMc <- 100
+a <- (sig2.hat) ** 2 / 10 + 2 
+b <- sig2.hat * (a - 1)
+v0 <- rep(10e-6, p)
+v1 <- rep(sqrt(max(beta.hat) * 100), p) / sqrt(sig2.hat)
+w <- 1 - sum(abs(beta.hat) < 4) / p
+gamma0 <- rep(0, p)
+```
+
+Apply the algorithm and estimate compuation time.
+
+```{r}
+ptm <- proc.time()
+
+res <- BvsMH(covariate, Y, nMc, v1, v0, w, gamma0, a, b, phi)
+
+Time.used <- proc.time() - ptm
+Time.used[3] / 60
+```
+
+Do Posterior inference of $\boldsymbol\gamma$.
+
+```{r}
+burnin <- 30
+accep.rate <- res$accept.count / nMc
+gamma.sample <- res$sample.gamma[(burnin + 1):nMc, ]
+post.gamma <- colMeans(gamma.sample)
+
+qplot(x = 1:5, y = true.gamma, colour = "Truth", geom = "point") + 
+  geom_point(aes(y = post.gamma, colour = "Estimation")) + 
+  coord_cartesian(ylim = c(0, 5)) + 
+  coord_cartesian(xlim = c(1, 5)) + 
+  xlab("x") + 
+  ylab("posterior gamma") + 
+  ggtitle(TeX("marginal posterior prob of $\\gamma_j=1$"))
+```
+
+## 4. Example: Solving Lasso by ADMM.
+
+Read data.
+
+```{r}
+n <- 500                 
+p <- 1000         
+maxiter <- 1000
+```
+
+The number of inportant features:
+
+```{r}
+s <- 100       
+```
+
+Coefficient:
+
+```{r}
+beta <- c(runif(s, -2, 2), rep(0, p - s))
+A <- matrix(rnorm(p*p), p, p)
+A <- scale(A, TRUE, TRUE)
+b <-  A %*% beta + 0.1*rnorm(n)
+```
+
+Tunning paramter:
+
+```{r}
+lambda <- 0.1*max(abs(t(A) %*% b))
+```
+
+Term will be used:
+
+```{r}
+rho <- 0.5
+solATA <- solve(t(A) %*% A + rho*diag(p))
+ATb <- t(A) %*% b
+```
+
+Run the solver.
+
+```{r}
+rrs <- ADMM(rho, solATA, ATb, p, maxiter)
+rrs.fast <- ADMM.fast(rho, solATA, ATb, maxiter)
+```
+
+Combine data.
+
+```{r}
+data <- data.frame(iter = seq(maxiter), rrs = rrs, rrs.fast = rrs.fast)
+```
+
+Gather data (gather in tidyr) or melt data (melt in reshape2).
+
+```{r}
+test.data <- melt(data, id = "iter")
+ggplot(test.data, aes(x = iter, y = value, colour = variable)) + geom_line()
+```
+
+## 5. Example: Lasso path by using 'prostateStnd' data
+
+Load data from `pmtk3` .
+
+```{r}
+data <- readMat('data/prostateStnd.mat')
+X <- data$Xtrain
+Y <- data$ytrain
+```
+
+Fit lasso:
+
+```{r}
+model <- glmnet(X, Y)
+```
+
+Extract lambda and estimated coefficient:
+
+```{r}
+lambda <- model$lambda
+beta.hat <- as.matrix(model$beta)
+data <- data.frame(lambda, t(beta.hat))
+names(data) <- c("lambda", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8")
+data <- melt(data, c("lambda"))
+```
+
+Regularization path:
+
+```{r}
+ggplot(data, aes(x = lambda,y = value)) +
+  geom_point(aes(colour = variable), size = .5) +
+  geom_line(aes(colour = variable)) + 
+  scale_x_reverse() + 
+  coord_cartesian(xlim = c(0, max(lambda) + 2 * sd(lambda))) +
+  coord_cartesian(ylim = c(min(beta.hat) - 2 * sd(beta.hat), 
+                           max(beta.hat) + 2 * sd(beta.hat))) +
+  xlab(TeX("$\\lambda$")) + 
+  ylab(TeX("$\\hat{w}_j(\\lambda)$"))
+```
+
+## 6. Example: Ridge path by using 'prostateStnd' data
+
+Fit ridge regression with same data from previous session:
+
+```{r}
+lambda <- seq(0, 100, 2)
+beta.hat <- matrix(NA, nrow = length(lambda), ncol = dim(X)[2])
+for (i in 1:length(lambda)){
+  beta.hat[i, ] <- solve(t(X) %*% X + lambda[i] * diag(dim(X)[2])) %*% t(X) %*% Y
+}
+data <- data.frame(lambda, beta.hat)
+names(data) <- c("lambda", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8")
+data <- melt(data, c("lambda"))
+```
+
+Regularization path:
+
+```{r}
+ggplot(data, aes(x = lambda, y=  value)) +
+  geom_point(aes(colour = variable), size = .5) +
+  geom_line(aes(colour = variable)) + 
+  scale_x_reverse() + 
+  coord_cartesian(xlim = c(0, max(lambda) + 2 * sd(lambda))) +
+  coord_cartesian(ylim = c(min(beta.hat) - 2 * sd(beta.hat), 
+                           max(beta.hat) + 2 * sd(beta.hat))) +
+  xlab(TeX("$\\lambda$")) + 
+  ylab(TeX("$\\hat{w}_j(\\lambda)$"))
+```
