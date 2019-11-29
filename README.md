@@ -1,4 +1,7 @@
 ## Description
+[![Build Status](https://travis-ci.org/jlin-vt/SML.svg?branch=master)](https://travis-ci.org/jlin-vt/SML)
+
+
 This repository explores the theory and application of statistical machine learning, focusing on statistics, Bayesian and graphical model. It follows the structure of the classical machine learning textbooks ([Machine Learning: a probabilistic approach](https://www.amazon.com/Machine-Learning-Probabilistic-Perspective-Computation/dp/0262018020)) by Kevin Murphy.
 
 ### Topics covered in the repository
