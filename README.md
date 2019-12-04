@@ -16,7 +16,7 @@ This repository explores the theory and application of statistical machine learn
 10. [Clustering](https://github.com/jlin-vt/SML/blob/master/vignettes/Ch25.Rmd)
 
 ## Software
-This toolkit contains many demos of different methods applied to many different kinds of data sets. The demos are listed [here](https://github.com/jlin-vt/SML/tree/master/R/vignettes). The vast majority of the code is written in `R`. In the future, I will provide wrappers to implementations written in `Julia`, for speed reasons. Both programs are math based and have their own advantages: `Julia` (like `Matlab`) is the one for designing algorithms (e.g. matrix operations), while `R` is great for data analysis and statistics.
+This toolkit contains many demos of different methods applied to many different kinds of data sets. The demos are listed [here](https://github.com/jlin-vt/SML/tree/master/vignettes). The vast majority of the code is written in `R`. In the future, I will provide wrappers to implementations written in `Julia`, for speed reasons. Both programs are math based and have their own advantages: `Julia` (like `Matlab`) is the one for designing algorithms (e.g. matrix operations), while `R` is great for data analysis and statistics.
 
 ### Dependencies
 If you choose `R`, you can download it from the [CRAN](https://cran.r-project.org/).  [R Studio](https://www.rstudio.com/) is an excellent graphical interface. Also, you should install a few packages:
