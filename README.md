@@ -39,9 +39,6 @@ For `Julia` users, I recommend installing the latest versions of [Julia](https:/
 - [Learning Julia](http://julialang.org/learning/)
 - [Advanced R](http://adv-r.had.co.nz/)
 
-## Disclaimer
-The above material is purely for self-study purposes and will not be published in any form or by any means, including photocopying, recording, or other electronic or mechanical methods, without the prior written permission of original authors.
-
 ## Bug Reports / Change Requests
 If you encounter a bug or would like make a change request, please file it as an issue [here](https://github.com/jlin-vt/SML/issues).
 
